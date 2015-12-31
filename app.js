@@ -1,13 +1,10 @@
-var cloudinary = require('cloudinary');
 var express = require("express");
 var Firebase = require("firebase");
 var Queue = require("firebase-queue");
-// var multer = require("multer");
-var multipart = require('connect-multiparty')
-// var bodyParser = require("body-parser");
+var Multipart = require('connect-multiparty');
+var IM = require('imagemagick');
 
-// var upload = multer();
-var app = express();
+// Internal modules
 var port = process.env.PORT || 3000;
 var dbRef = new Firebase('https://cowbell-dev.firebaseio.com/queue');
 var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
@@ -16,43 +13,37 @@ var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
   resolve();
 });
 
-// app.use(bodyParser.json());
-// app.use(bodyParser.urlencoded({ extended: true }));
+// initialize app and configure app
+var app = express();
+var dims = require("./helpers/dims")(app);
+
 app.use('/assets', express.static(__dirname +'/public'));
-app.use(multipart({
-  uploadDir: "upload/images"
-}));
+app.use(Multipart({ uploadDir: "upload/images/wip" }));
+app.post("/upload/images/wip", (req, res, next) => {
+  // 1. begin resizing image
+  var file = req.files.file
+    , filepath = __dirname +"/" +file.path;
 
-app.get('/', function(req, res) {
-  console.log("PORT: ", process.env.PORT);
-  res.send(
-    '<html>'
-    +'  <head>'
-    +'    <title>Testing</title>'
-    +'    <link href="assets/style.css" type="text/css" rel="stylesheet">Testing</title>'
-    +'  </head>'
-    +'  <body>Testing, 1...2...3</body>'
-    +'</html>'
-  );
-});
+  IM.identify(filepath, (err, specs) => {
+    if (err) {
+      console.log(err);
+      res.status(301).send(err);
+    } else {
+      var newDims = dims.adjustDims({ height: specs.height, width: specs.width })
+        , destPath = __dirname +"/upload/images/done/" +file.name
+        , args = {
+          srcPath: filepath,
+          dstPath: destPath,
+          width: newDims.width
+        };
 
-app.get('/api', function(req, res) {
-  res.send({ name: "Albert Chang", age: 32 });
-});
-
-app.get('/person/:id', function(req, res) {
-  var people = [
-    { name: "Albert Chang", age: 37},
-    { name: "Jack Black", age: 42}
-  ];
-  
-  var index = req.params["id"];
-  res.json( people[index] || { name: "generic", age: 25 });
-});
-
-app.post("/upload/images", function(req, res, next) {
-  var msg = "It worked, biyatch!";
-  res.status(200).send(msg);
+      IM.resize(args, (err, stdout, stderr) => {
+         // do stuff
+         // obtain all img host credentials
+        res.status(200).send("Great -- Img uploaded!");
+      });
+    }
+  });
 
   // var s3Obj = {
   //     uri: file.uri,
