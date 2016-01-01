@@ -1,8 +1,9 @@
 var express = require("express");
-var Firebase = require("firebase");
+// var Firebase = require("firebase");
 var Queue = require("firebase-queue");
 var Multipart = require('connect-multiparty');
 var IM = require('imagemagick');
+var Async = require('async');
 
 // Internal modules
 var port = process.env.PORT || 3000;
@@ -15,35 +16,61 @@ var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
 
 // initialize app and configure app
 var app = express();
-var dims = require("./helpers/dims")(app);
+var dims = require("./helpers/dims");
+var Init = require("./helpers/init")(app);
 
-app.use('/assets', express.static(__dirname +'/public'));
-app.use(Multipart({ uploadDir: "upload/images/wip" }));
-app.post("/upload/images/wip", (req, res, next) => {
-  // 1. begin resizing image
+Init.setBaseDir(__dirname);
+Init.setImgBucket("/upload/images");
+
+var paths = app.locals.paths, wipBucket = "/wip", doneBucket = "/done";
+
+app.use(Multipart({ uploadDir: paths.imgBucket +wipBucket }));
+app.post(paths.imgBucket +wipBucket, (req, res, next) => {
   var file = req.files.file
-    , filepath = __dirname +"/" +file.path;
+    , filepath = paths.base +"/" +file.path;
 
-  IM.identify(filepath, (err, specs) => {
-    if (err) {
-      console.log(err);
-      res.status(301).send(err);
-    } else {
-      var newDims = dims.adjustDims({ height: specs.height, width: specs.width })
-        , destPath = __dirname +"/upload/images/done/" +file.name
-        , args = {
-          srcPath: filepath,
-          dstPath: destPath,
-          width: newDims.width
-        };
+  // 1. Obtain metadata about original image
+  var qImgResize = new Promise((resolve, reject) => {
+    IM.identify(filepath, (err, specs) => {
+      if (err) {
+        console.log(err);
+        res.status(404).send(err);
+      } else {
+        var newDims = dims.adjustDims(specs)
+          , destPath = paths.base +paths.imgBucket +doneBucket +"/" +file.name
+          , args = {
+            srcPath: filepath,
+            dstPath: destPath,
+            width: newDims.width
+          };
 
-      IM.resize(args, (err, stdout, stderr) => {
-         // do stuff
-         // obtain all img host credentials
-        res.status(200).send("Great -- Img uploaded!");
-      });
-    }
-  });
+        // 2. Resize original image and route to done bucket
+        IM.resize(args, (err, stdout, stderr) => {
+           // obtain all img host credentials
+          if ( _isEmpty(stderr) )
+            res.status(200).send("Great -- Img uploaded!");
+          else
+            res.status(404).send(stderr);
+          
+          resolve();
+        });
+      }
+    });
+  })
+
+  qImgResize.then(() => {
+    Async.parallel({
+      cleanup: (cleanupCb) => {
+         // 3. Cleanup original image from WIP bucket
+      },
+      upload: (uploadCb) => {
+        // 4. Upload resized image to Image host provider
+      }
+    }, (err, results) => {
+
+    });
+  })
+  
 
   // var s3Obj = {
   //     uri: file.uri,

@@ -1,8 +1,7 @@
 var _ = require("lodash");
 
-var dims = function (app) {
+var dims = function () {
   var _specs = { img: { max: 960 } };
-  _.assign(app.locals, { specs: this._specs });    
 
   return {
     adjustDims: function(dims) {
