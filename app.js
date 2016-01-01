@@ -1,18 +1,19 @@
 var express = require("express");
 // var Firebase = require("firebase");
-var Queue = require("firebase-queue");
+// var Queue = require("firebase-queue");
 var Multipart = require('connect-multiparty');
 var IM = require('imagemagick');
 var Async = require('async');
+var _ = require("lodash");
 
 // Internal modules
 var port = process.env.PORT || 3000;
-var dbRef = new Firebase('https://cowbell-dev.firebaseio.com/queue');
-var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
-  console.log("Queue Data: ", data);
-  progress(50);
-  resolve();
-});
+// var dbRef = new Firebase('https://cowbell-dev.firebaseio.com/queue');
+// var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
+//   console.log("Queue Data: ", data);
+//   progress(50);
+//   resolve();
+// });
 
 // initialize app and configure app
 var app = express();
@@ -20,14 +21,13 @@ var dims = require("./helpers/dims");
 var Init = require("./helpers/init")(app);
 
 Init.setBaseDir(__dirname);
-Init.setImgBucket("/upload/images");
+Init.setImgBucket("upload/images");
 
-var paths = app.locals.paths, wipBucket = "/wip", doneBucket = "/done";
+var paths = app.locals.paths, wipBucket = "wip", doneBucket = "done";
 
-app.use(Multipart({ uploadDir: paths.imgBucket +wipBucket }));
-app.post(paths.imgBucket +wipBucket, (req, res, next) => {
-  var file = req.files.file
-    , filepath = paths.base +"/" +file.path;
+app.use(Multipart({ uploadDir: paths.imgBucket +"/" +wipBucket }));
+app.post("/" +paths.imgBucket +"/" +wipBucket, (req, res, next) => {
+  var file = req.files.file, filepath = paths.base +"/" +file.path;
 
   // 1. Obtain metadata about original image
   var qImgResize = new Promise((resolve, reject) => {
@@ -37,8 +37,9 @@ app.post(paths.imgBucket +wipBucket, (req, res, next) => {
         res.status(404).send(err);
       } else {
         var newDims = dims.adjustDims(specs)
-          , destPath = paths.base +paths.imgBucket +doneBucket +"/" +file.name
-          , args = {
+          , destPath = paths.base +"/" +paths.imgBucket +"/" +doneBucket +"/" +file.name;
+        
+        var args = {
             srcPath: filepath,
             dstPath: destPath,
             width: newDims.width
@@ -47,7 +48,7 @@ app.post(paths.imgBucket +wipBucket, (req, res, next) => {
         // 2. Resize original image and route to done bucket
         IM.resize(args, (err, stdout, stderr) => {
            // obtain all img host credentials
-          if ( _isEmpty(stderr) )
+          if ( _.isEmpty(stderr) )
             res.status(200).send("Great -- Img uploaded!");
           else
             res.status(404).send(stderr);
@@ -58,18 +59,18 @@ app.post(paths.imgBucket +wipBucket, (req, res, next) => {
     });
   })
 
-  qImgResize.then(() => {
-    Async.parallel({
-      cleanup: (cleanupCb) => {
-         // 3. Cleanup original image from WIP bucket
-      },
-      upload: (uploadCb) => {
-        // 4. Upload resized image to Image host provider
-      }
-    }, (err, results) => {
+  // qImgResize.then(() => {
+  //   Async.parallel({
+  //     cleanup: (cleanupCb) => {
+  //        // 3. Cleanup original image from WIP bucket
+  //     },
+  //     upload: (uploadCb) => {
+  //       // 4. Upload resized image to Image host provider
+  //     }
+  //   }, (err, results) => {
 
-    });
-  })
+  //   });
+  // })
   
 
   // var s3Obj = {
