@@ -2,8 +2,6 @@ var express = require("express");
 // var Firebase = require("firebase");
 // var Queue = require("firebase-queue");
 var FS = require("fs");
-var Multipart = require('connect-multiparty');
-var IM = require('imagemagick');
 var Async = require('async');
 var _ = require("lodash");
 
@@ -18,49 +16,19 @@ var port = process.env.PORT || 3000;
 
 // initialize app and configure app
 var app = express();
-var dims = require("./helpers/dims");
 var Init = require("./helpers/init")(app);
-
 Init.setBaseDir(__dirname);
 Init.setImgBucket("upload/images");
 
-var paths = app.locals.paths, wipBucket = "wip", doneBucket = "done";
+var Image = new require("./helpers/image")(app)
+  , paths = app.locals.paths
+  , buckets = app.locals.buckets;
 
-app.use(Multipart({ uploadDir: paths.imgBucket +"/" +wipBucket }));
-app.post("/" +paths.imgBucket +"/" +wipBucket, (req, res, next) => {
-  var file = req.files.file, filepath = paths.base +"/" +file.path;
-
-  // 1. Obtain metadata about original image
-  var qImgResize = new Promise((resolve, reject) => {
-    IM.identify(filepath, (err, specs) => {
-      if (err) {
-        console.log(err);
-        res.status(404).send(err);
-      } else {
-        var newDims = dims.adjustDims(specs)
-          , destPath = paths.base +"/" +paths.imgBucket +"/" +doneBucket +"/" +file.name;
-        
-        var args = {
-            srcPath: filepath,
-            dstPath: destPath,
-            width: newDims.width
-          };
-
-        // 2. Resize original image and route to done bucket
-        IM.resize(args, (err, stdout, stderr) => {
-           // obtain all img host credentials
-          if ( _.isEmpty(stderr) )
-            res.status(200).send("Great -- Img uploaded!");
-          else
-            res.status(404).send(stderr);
-          
-          resolve();
-        });
-      }
-    });
-  })
-
-  qImgResize.then(() => {
+app.post("/" +paths.imgBucket +"/" +buckets.wip, (req, res, next) => {
+  var file = req.files.file;
+  
+  Image.resize(file, res).then(() => {
+    debugger;
     Async.parallel({
       cleanup: (cleanupCb) => {
          // 3. Cleanup original image from WIP bucket
@@ -78,7 +46,7 @@ app.post("/" +paths.imgBucket +"/" +wipBucket, (req, res, next) => {
     }, (err, results) => {
       debugger;
     });
-  })
+  });
   
 
   // var s3Obj = {
