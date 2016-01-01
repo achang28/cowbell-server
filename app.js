@@ -1,6 +1,7 @@
 var express = require("express");
 // var Firebase = require("firebase");
 // var Queue = require("firebase-queue");
+var FS = require("fs");
 var Multipart = require('connect-multiparty');
 var IM = require('imagemagick');
 var Async = require('async');
@@ -59,18 +60,25 @@ app.post("/" +paths.imgBucket +"/" +wipBucket, (req, res, next) => {
     });
   })
 
-  // qImgResize.then(() => {
-  //   Async.parallel({
-  //     cleanup: (cleanupCb) => {
-  //        // 3. Cleanup original image from WIP bucket
-  //     },
-  //     upload: (uploadCb) => {
-  //       // 4. Upload resized image to Image host provider
-  //     }
-  //   }, (err, results) => {
-
-  //   });
-  // })
+  qImgResize.then(() => {
+    Async.parallel({
+      cleanup: (cleanupCb) => {
+         // 3. Cleanup original image from WIP bucket
+        FS.unlink(file.path, (err) => {
+          if (err)
+            cleanupCb(err, null);
+          else
+            cleanupCb(null, "old file removed");
+        });
+      },
+      upload: (uploadCb) => {
+        // 4. Upload resized image to Image host provider
+        uploadCb(null, "file uploaded")
+      }
+    }, (err, results) => {
+      debugger;
+    });
+  })
   
 
   // var s3Obj = {
