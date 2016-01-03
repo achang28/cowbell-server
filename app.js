@@ -6,7 +6,6 @@ var express = require("express");
 var async = require('async');
 var body_parser = require('body-parser');
 var express = require("express");
-var fs = require("fs");
 var http = require('http');
 var path = require('path');
 var port = process.env.PORT || 3000;
@@ -31,43 +30,23 @@ var Image = new require("./helpers/image")(app)
 app.post("/" +paths.imgBucket +"/" +buckets.wip, (req, res, next) => {
   var file = req.files.file;
   
-  Image.resize(file, res).then((doneFilepath) => {
-    res.status(200).send("Great -- Img uploaded!");
+  Image.resize(file, res).then((fileInfo) => {
+    // 4. Upload resized image to Image host provider
+    var hostFilepath = "issues/" +fileInfo.filename;
+    var resData;
 
-    async.parallel({
-      cleanup: (cleanupCb) => {
-         // 3. Cleanup original image from WIP bucket
-        fs.unlink(file.path, (err) => {
-          if (err) cleanupCb(err, null);
-          else cleanupCb(null, "old file removed");
-        });
-      },
-      upload: (uploadCb) => {
-        // 4. Upload resized image to Image host provider
-        var hostBasepath = "Issues/" +file.name;
-        Image.upload(file, hostBasepath, doneFilepath, uploadCb);
-      }
-    }, (err, results) => {
-      var x = 5;
+    Image.upload(file, fileInfo.dstPath, hostFilepath).then((successMsg) => {
+      // 3. Cleanup original images from WIP and READY buckets
+      Image.cleanup([fileInfo.srcPath, fileInfo.dstPath]);
+      resData = { code: 200, msg: successMsg };
+    }).catch((err) => {
+      resData = { code: 404, msg: err };
+    }).finally(() => {
+      res.status(resData.code).send(resData.msg);
     });
   }).catch((err) => {
     res.status(404).send(err);
   });
-  
-
-  // var s3Obj = {
-  //     uri: file.uri,
-  //     uploadUrl: s3Data.url,
-  //     mimeType: "image/" +file.ext,
-  //     data: {
-  //       'acl': 'public-read',
-  //       'AWSAccessKeyId': s3Data.key,
-  //       'Content-Type': "image/" +file.ext,
-  //       'policy': s3Data.policy,
-  //       'key': this._storeName +"/" +file.name,
-  //       'signature': s3Data.signature,
-  //     },
-  //   };
 })
 
 app.listen(port);
