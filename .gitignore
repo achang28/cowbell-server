@@ -8,3 +8,7 @@ node_modules/
 npm-debug.log
 public/images/wip/*
 public/images/done/*
+
+# Environment variables
+#
+.env

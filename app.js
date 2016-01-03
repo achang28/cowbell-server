@@ -1,12 +1,16 @@
+'use strict'
+
 var express = require("express");
 // var Firebase = require("firebase");
 // var Queue = require("firebase-queue");
-var FS = require("fs");
-var Async = require('async');
-var _ = require("lodash");
-
-// Internal modules
+var async = require('async');
+var body_parser = require('body-parser');
+var express = require("express");
+var fs = require("fs");
+var http = require('http');
+var path = require('path');
 var port = process.env.PORT || 3000;
+var _ = require("lodash");
 // var dbRef = new Firebase('https://cowbell-dev.firebaseio.com/queue');
 // var queue = new Queue(dbRef, function(data, progress, resolve, reject) {
 //   console.log("Queue Data: ", data);
@@ -27,25 +31,27 @@ var Image = new require("./helpers/image")(app)
 app.post("/" +paths.imgBucket +"/" +buckets.wip, (req, res, next) => {
   var file = req.files.file;
   
-  Image.resize(file, res).then(() => {
-    debugger;
-    Async.parallel({
+  Image.resize(file, res).then((doneFilepath) => {
+    res.status(200).send("Great -- Img uploaded!");
+
+    async.parallel({
       cleanup: (cleanupCb) => {
          // 3. Cleanup original image from WIP bucket
-        FS.unlink(file.path, (err) => {
-          if (err)
-            cleanupCb(err, null);
-          else
-            cleanupCb(null, "old file removed");
+        fs.unlink(file.path, (err) => {
+          if (err) cleanupCb(err, null);
+          else cleanupCb(null, "old file removed");
         });
       },
       upload: (uploadCb) => {
         // 4. Upload resized image to Image host provider
-        uploadCb(null, "file uploaded")
+        var hostBasepath = "Issues/" +file.name;
+        Image.upload(file, hostBasepath, doneFilepath, uploadCb);
       }
     }, (err, results) => {
-      debugger;
+      var x = 5;
     });
+  }).catch((err) => {
+    res.status(404).send(err);
   });
   
 

@@ -1,21 +1,25 @@
 {
   "name": "Cowbell-Server",
   "description": "Provides services for handling various items needed by CowBell mobile app",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": false,
   "engines": {
-    "node": "4.x"
+    "node": "4.x",
+    "aws-sdk": "*"
   },
   "scripts": {},
   "dependencies": {
     "async": "^1.5.0",
+    "aws-sdk": "^2.2.26",
+    "body-parser": "^1.14.2",
     "connect-multiparty": "~2.0.0",
+    "dotenv": "^1.2.0",
     "express": "~4.13.3",
-    "firebase": "~2.3.2",
+    "firebase": "^2.3.2",
     "fs": "0.0.2",
     "imagemagick": "~0.1.3",
     "lodash": "~3.10.0",
-    "moment": "~2.10.3",
+    "moment": "^2.10.6",
     "promise-defer": "~1.0.0",
     "util": "^0.10.3"
   }
