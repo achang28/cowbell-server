@@ -16,10 +16,16 @@ function image(app) {
 
   app.use(Multiparty({ uploadDir: _paths.imgBucket +"/" +_buckets.wip }));
 
-  function _getFilename(file) {
+  function _getFilename(reqBody) {
+    //var filename = filepath.substr( filepath.lastIndexOf("/") + 1, filepath.lastIndex );
     //return file.name;
-    var filepath = file.path;
-    return filepath.substr( filepath.lastIndexOf("/") + 1, filepath.lastIndex );
+    return reqBody.issueId +"-" +reqBody.index;
+  }
+
+  function _getFiletype(blob) {
+    var filetype = ".";
+    filetype += ( blob.indexOf("/") < 0 ) ? blob : blob.substring(blob.lastIndexOf("/") + 1, blob.length);
+    return filetype;
   }
 
   function _buildFilepath(args) {
@@ -30,9 +36,9 @@ function image(app) {
     return filepath;
   }
 
-  function _buildResizeArgs(fileSpecs, file, wipFilepath) {
+  function _buildResizeArgs(fileSpecs, reqBody, wipFilepath) {
     var newDims = Dims.adjustDims(fileSpecs);
-    var filename = _getFilename(file);
+    var filename = _getFilename(reqBody) + _getFiletype(fileSpecs["mime type"]);
     var filepathArgs = [_paths.base, _paths.imgBucket, _buckets.done, filename];
 
     return {
@@ -53,26 +59,35 @@ function image(app) {
       );
     },
 
-    resize: function(file, res) {
+    resize: function(reqBody, file, res) {
       var filepathArgs = [_paths.base, file.path];
       var wipFilepath = _buildFilepath(filepathArgs);
       var qWipFile = Defer(), qResize = Defer();
 
+      /**
+       * Metadata is obtained from the inbound img file for e.g.
+       * img dimensions...
+       */
       IM.identify(wipFilepath, (err, specs) => {
         if (err) qWipFile.reject("Can't get file specs: " +err);
         else qWipFile.resolve(specs);
       });
 
       qWipFile.promise.then((specs) => {
-        var args = _buildResizeArgs(specs, file, wipFilepath);
+        var args = _buildResizeArgs(specs, reqBody, wipFilepath);
 
-        // 2. Resize original image and route to "done" bucket
+        /**
+         * Original img file is used as reference, and a newly resized img is produced.
+         * The resized img is then placed in a "done" bucket for further processing
+         */
         IM.resize(args, (err, stdout, stderr) => {
           // obtain all img host credentials
           if (stderr) qResize.reject("Can't resize file: " +stderr);
           else qResize.resolve(args);
         });
-      }).catch((err) => qResize.reject(err));
+      }).catch((err) => {
+        qResize.reject(err)
+      });
 
       return qResize.promise;
     },

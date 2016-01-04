@@ -1,7 +1,8 @@
 'use strict'
 
+require('dotenv').load();
 var express = require("express");
-// var Firebase = require("firebase");
+var firebase = require("firebase");
 // var Queue = require("firebase-queue");
 var async = require('async');
 var body_parser = require('body-parser');
@@ -29,20 +30,45 @@ var Image = new require("./helpers/image")(app)
 
 app.post("/" +paths.imgBucket +"/" +buckets.wip, (req, res, next) => {
   var file = req.files.file;
+  var reqBody = req.body;
   
-  Image.resize(file, res).then((fileInfo) => {
-    // 4. Upload resized image to Image host provider
+  Image.resize(reqBody, file, res).then((fileInfo) => {
+    /**
+     * A inbound file is first referenced from a "wip" bucket, then it
+     * is resized based pre-defined length for the longest side of the
+     * img. During this process, the resized img is renamed and placed
+     * in a "done" bucket. The resized img file is both uploaded to the
+     * host img provider, and the filepath where the uploaded file is
+     * placed is updated in the corresponding db record.
+     */
+
+    // 4A) Upload resized image to Image host provider
+    var url = "https://" +process.env.DB +"-" +reqBody.env  +".firebaseIO.com";
+    var db = new firebase(url);
     var hostFilepath = "issues/" +fileInfo.filename;
     var resData;
 
-    Image.upload(file, fileInfo.dstPath, hostFilepath).then((successMsg) => {
+    var qUploadImg = Image.upload(file, fileInfo.dstPath, hostFilepath).then((successMsg) => {
       // 3. Cleanup original images from WIP and READY buckets
       Image.cleanup([fileInfo.srcPath, fileInfo.dstPath]);
-      resData = { code: 200, msg: successMsg };
-    }).catch((err) => {
-      resData = { code: 404, msg: err };
-    }).finally(() => {
-      res.status(resData.code).send(resData.msg);
+      return successMsg;
+    });
+
+    // 4B) Update DB entry with hostFilepath
+    var qUpdateDb = new Promise((resolve, reject) => {
+      var imgRef = db.child("issues").child(reqBody.issueId +"/images/" +parseInt(reqBody.index));
+
+      imgRef.update({uri: hostFilepath}, (err) => {
+        if (err) reject("couldn't update DB");
+        else resolve("Great! DB updated!");
+      });
+    });
+
+    Promise.all([qUploadImg, qUpdateDb]).then((results) => {
+      var msg = "1) Img uploaded to host && 2) Db record updated with host filepath";
+      res.status(200).send(msg);
+    }, (err) => {
+      res.status(404).send(err);
     });
   }).catch((err) => {
     res.status(404).send(err);
